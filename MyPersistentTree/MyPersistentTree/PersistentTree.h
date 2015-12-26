@@ -89,6 +89,12 @@ namespace Persistent
 				current = current->Next();
 				return *this;
 			}
+			
+			iterator& operator++(int)
+			{
+				current = current->Next();
+				return *this;
+			}
 		};
 
 		Tree()
@@ -98,6 +104,15 @@ namespace Persistent
 		}
 
 		/// temporary for testing ; this class should comply more or less to std::(multi)set interface
+		void clear()
+		{
+			for (iterator it = this->begin(); it != this->end(); it++)
+			{
+				remove(it);
+			}
+		}
+
+
 		void insert(T value)
 		{
 			pointer_ cand = root, newNode = std::make_shared<Node>(value), tmp = nullptr;;
@@ -134,6 +149,11 @@ namespace Persistent
 			if (node == nullptr)
 				return end();
 			return iterator(node);
+		}
+
+		void remove(const iterator& it)
+		{
+			this->remove(*it);
 		}
 
 		pointer_ remove(const T& val)
