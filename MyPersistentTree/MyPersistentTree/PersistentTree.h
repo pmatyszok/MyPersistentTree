@@ -6,16 +6,93 @@ namespace Persistent
 	template <typename T>
 	class TreeIterator;
 
-	template <typename T, typename Allocator=std::allocator<T>>
+	template <typename T, typename A=std::allocator<T>>
 	class Tree
 	{
-		friend class TreeIterator<T>;
 		struct Node;
+		typedef typename std::shared_ptr<Node> pointer_;
+		typedef typename std::weak_ptr<Node> weak_pointer;
 	public:
-		typedef T ValueType;
-		typedef Allocator AllocatorType;
+		typedef A allocator_type;
+		typedef typename A::value_type value_type;
+		typedef typename A::reference reference;
+		typedef typename A::const_reference const_reference;
+		typedef typename A::difference_type difference_type;
+		typedef typename A::size_type size_type;
+
+		class iterator
+		{
+		public:
+			typedef typename A::difference_type difference_type;
+			typedef typename A::value_type value_type;
+			typedef typename A::reference reference;
+			typedef typename A::pointer pointer;
+			typedef std::random_access_iterator_tag iterator_category;
+
+			typedef typename std::shared_ptr<typename Tree<T>::Node> NodeType;
+		private:
+			NodeType current;
+		public:
+			iterator(NodeType item) :
+				current(item)
+			{
+
+			}
+
+			iterator(const iterator & rhs)
+			{
+				this->current = rhs.current;
+			}
+
+			~iterator()
+			{
+				current = nullptr;;
+			}
+
+			iterator& operator= (const iterator& rhs)
+			{
+				if (this->current == rhs.current)
+					return *this;
+				this->current = rhs.current;
+				return *this;
+			}
+
+			bool operator == (const iterator& rhs) const
+			{
+				return this->current == rhs.current;
+			}
+
+			bool operator != (const iterator& rhs) const
+			{
+				return this->current != rhs.current;
+			}
+
+			iterator& operator += (size_type count)
+			{
+				while (count--)
+					this->operator++();
+				return *this;
+			}
+
+			reference operator* () const
+			{
+				return *(current->value);
+			}
+
+			pointer operator -> () const
+			{
+				return current->value;
+			}
+
+			iterator& operator++()
+			{
+				current = current->Next();
+				return *this;
+			}
+		};
+
 		Tree()
-			: root(nullptr)
+			: root(nullptr), sentinel(nullptr)
 		{
 
 		}
@@ -23,7 +100,7 @@ namespace Persistent
 		/// temporary for testing ; this class should comply more or less to std::(multi)set interface
 		void insert(T value)
 		{
-			pointer cand = root, newNode = std::make_shared<Node>(value), tmp = nullptr;;
+			pointer_ cand = root, newNode = std::make_shared<Node>(value), tmp = nullptr;;
 			while (cand != nullptr)
 			{
 				tmp = cand;
@@ -50,29 +127,115 @@ namespace Persistent
 			}
 		}
 
-		TreeIterator<T> begin()
+		iterator find(const T& val)
 		{
-			return TreeIterator<T>(root);
+			pointer_ node = find_internal(val);
+			
+			if (node == nullptr)
+				return end();
+			return iterator(node);
+		}
+
+		pointer_ remove(const T& val)
+		{
+			pointer_ to_remove = find_internal(val);
+			if (to_remove == nullptr)
+			{
+				return nullptr;
+			}
+			
+			pointer_ y, x;
+			if (to_remove->left == nullptr || to_remove == nullptr)
+			{
+				y = to_remove;
+			}
+			else
+			{
+				y = to_remove->Next();
+			}
+			if (y->left != nullptr)
+			{
+				x = y->left;
+			}
+			else
+			{
+				x = y->right;
+			}
+			if (x != nullptr)
+			{
+				x->parent = y->parent.lock();
+			}
+			if (y->parent.lock() == nullptr)
+			{
+				root = x;
+			}
+			else
+			{
+				if (y == y->parent.lock()->left)
+				{
+					y->parent.lock()->left = x;
+				}
+				else
+				{
+					y->parent.lock()->right = x;
+				}
+			}
+			if (y != to_remove)
+			{
+				to_remove->value = y->value;
+				to_remove->parent = y->parent.lock();
+				to_remove->left = y->left;
+				to_remove->right = y->right;
+			}
+			return y;
+		}
+
+		iterator begin()
+		{
+			return iterator(root);
+		}
+
+		iterator end()
+		{
+			if (root == nullptr)
+				return begin();
+			return iterator(sentinel);
 		}
 
 	private:
-		typedef typename std::shared_ptr<Node> pointer;
 		
 		
+		pointer_ find_internal(T val)
+		{
+			auto node = root;
+			while ((node != nullptr) && (*(node->value) != val))
+			{
+				if (val < *(node->value))
+				{
+					node = node->left;
+				}
+				else
+				{
+					node = node->right;
+				}
+			}
+			return node;
+		}
+
 		struct Node
 		{
-			pointer left;
-			pointer right;
-			pointer parent;
-			std::shared_ptr<ValueType> value;
+			pointer_ left;
+			pointer_ right;
+			weak_pointer parent;
+			std::shared_ptr<T> value;
 
-			Node(ValueType value)
-				: left(nullptr), right(nullptr), parent(nullptr), value(std::allocate_shared<Tree::ValueType>(Tree::AllocatorType(), value))
+			Node(T value)
+				: left(nullptr), right(nullptr), value(std::allocate_shared<T>(Tree::allocator_type(), value))
 			{
 
 			}
 
-			pointer MinimumNode(pointer node)
+			pointer_ MinimumNode(pointer_ node)
 			{
 				while (node->left != nullptr)
 				{
@@ -81,55 +244,25 @@ namespace Persistent
 				return node;
 			}
 
-			pointer Next()
+			pointer_ Next()
 			{
 				if (this->right != nullptr)
 					return MinimumNode(this->right);
-				std::shared_ptr<Node> cand = this->parent, r = nullptr;
+				pointer_ cand = this->parent.lock(), r = nullptr;
 				while (cand != nullptr && (r = cand->right) != nullptr)
 				{
 					r = cand;
-					cand = cand->parent;
+					cand = cand->parent.lock();
 				}
 				return cand;
 
 			}
 		};
 
-		std::shared_ptr<Node> root;
+		pointer_ root;
+		pointer_ sentinel;
 
 	public:
 
-	};
-
-	template<typename T>
-	class TreeIterator : public std::iterator<std::forward_iterator_tag, T>
-	{
-	public:
-		typedef typename std::shared_ptr<typename Tree<T>::Node> NodeType;
-	private:
-		NodeType current;
-	public:
-		TreeIterator(NodeType item) :
-			current(item)
-		{
-
-		}
-		
-		bool operator != (const TreeIterator<T> & rhs)
-		{
-			return this->current != rhs.current;
-		}
-
-		T operator* () const
-		{
-			return *(current->value);
-		}
-
-		TreeIterator<T>& operator++()
-		{
-			current = current->Next();
-			return *this;
-		}
 	};
 }
