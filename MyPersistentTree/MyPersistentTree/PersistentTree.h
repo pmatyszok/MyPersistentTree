@@ -6,7 +6,7 @@ namespace Persistent
 	template <typename T>
 	class TreeIterator;
 
-	template <typename T, typename A=std::allocator<T>>
+	template < typename T, typename A = std::allocator<T>, typename TIME_T = unsigned int >
 	class Tree
 	{
 		struct Node;
@@ -98,10 +98,12 @@ namespace Persistent
 		};
 
 		Tree()
-			: root(nullptr), sentinel(nullptr)
+			: root(nullptr), sentinel(nullptr), time(0)
 		{
 
 		}
+
+		TIME_T GetTime() { return time; }
 
 		/// temporary for testing ; this class should comply more or less to std::(multi)set interface
 		void clear()
@@ -223,7 +225,9 @@ namespace Persistent
 		}
 
 	private:
-		
+		pointer_ root;
+		pointer_ sentinel;
+		TIME_T time;
 		
 		pointer_ find_internal(T val)
 		{
@@ -241,18 +245,120 @@ namespace Persistent
 			}
 			return node;
 		}
+		enum class Modification_t : unsigned int
+		{
+			None,
+			Left,
+			Right,
+			Value
+		};
+
+		union Store_t
+		{
+			pointer_ node;
+			std::shared_ptr<T> value;
+			~Store_t()
+			{
+
+			}
+		};
+
+		struct ModInfo
+		{
+			const Modification_t kind;
+			TIME_T time;
+			Store_t store;
+			
+			explicit ModInfo(Modification_t which, const pointer_& node, const TIME_T t)
+				: kind(which), time(t)
+			{
+				assert(kind == Modification_t::Left || kind == Modification_t::Right);
+				store.node = node;
+			}
+			
+			explicit ModInfo(Modification_t which, const std::shared_ptr<T>& value, const TIME_T t)
+				: kind(which), time(t)
+			{
+				assert(kind == Modification_t::Value);
+				store.value = value;
+			}
+
+			~ModInfo()
+			{
+			}
+		};
 
 		struct Node
 		{
+		private:
 			pointer_ left;
 			pointer_ right;
 			weak_pointer parent;
+			std::unique_ptr<ModInfo> modInfo;
 			std::shared_ptr<T> value;
 
+		public:
 			Node(T value)
 				: left(nullptr), right(nullptr), value(std::allocate_shared<T>(Tree::allocator_type(), value))
 			{
 
+			}
+
+			//for tree recreation when going up
+			Node(T value, const pointer_& left, const pointer_& right, const weak_pointer& parent)
+				: this->left(left), this->right(right), this->parent(parent.lock())
+			{
+
+			}
+
+			const pointer_ Left(const TIME_T when)
+			{
+				if (modInfo && modInfo->time <= when && modInfo->kind == Modification_t::Left)
+				{
+					return modInfo->store.node;
+				}
+				return left;
+			}
+
+			const pointer_ Right(const TIME_T when)
+			{
+				if (modInfo && modInfo->time <= when && modInfo->kind == Modification_t::Right)
+				{
+					return modInfo->store.node;
+				}
+				return right;
+			}
+
+			const std::shared_ptr<T> Value(const TIME_T when)
+			{
+				if (modInfo && modInfo->time <= when && modInfo->kind == Modification_t::Value)
+				{
+					return modInfo->store.value;
+				}
+				return value;
+			}
+
+			bool HasModification() const
+			{
+				return modInfo != nullptr;
+			}
+			
+			void SetLeft(const pointer_ & newLeft, const TIME_T when)
+			{
+				assert(modInfo == nullptr);
+				modInfo = std::make_unique<ModInfo>(Modification_t::Left, newLeft, when);
+			}
+
+			void SetRight(const pointer_ & newRight, const TIME_T when)
+			{
+				assert(modInfo == nullptr);
+				modInfo = std::make_unique<ModInfo>(Modification_t::Right, newRight, when);
+			}
+
+			void SetValue(const std::shared_ptr<T>& newValue, const TIME_T when)
+			{
+				assert(modInfo == nullptr);
+				modInfo = std::make_unique<ModInfo>(Modification_t::Value, newValue, when);
 			}
 
 			pointer_ MinimumNode(pointer_ node)
@@ -279,8 +385,7 @@ namespace Persistent
 			}
 		};
 
-		pointer_ root;
-		pointer_ sentinel;
+		
 
 	public:
 
