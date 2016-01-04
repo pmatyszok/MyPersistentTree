@@ -1,6 +1,8 @@
 #pragma once
 #include <memory>
 #include <iterator>
+#include <map>
+#include <cassert>
 namespace Persistent
 {
 	template <typename T>
@@ -32,21 +34,24 @@ namespace Persistent
 			typedef typename std::shared_ptr<typename Tree<T>::Node> NodeType;
 		private:
 			NodeType current;
+			Tree<T, A, TIME_T>& tree;
+			TIME_T time;
 		public:
-			iterator(NodeType item) :
-				current(item)
+			iterator(NodeType item, Tree<T,A,TIME_T>& tr, TIME_T t) :
+				current(item), tree(tr), time(t)
 			{
 
 			}
 
 			iterator(const iterator & rhs)
+				: current(rhs.current), tree(rhs.tree), time(rhs.time)
 			{
-				this->current = rhs.current;
+
 			}
 
 			~iterator()
 			{
-				current = nullptr;;
+				current = nullptr;
 			}
 
 			iterator& operator= (const iterator& rhs)
@@ -54,17 +59,19 @@ namespace Persistent
 				if (this->current == rhs.current)
 					return *this;
 				this->current = rhs.current;
+				this->time = rhs.time;
+				this->tree = rhs.tree;
 				return *this;
 			}
 
 			bool operator == (const iterator& rhs) const
 			{
-				return this->current == rhs.current;
+				return this->current == rhs.current && &(this->tree) == &(rhs.tree) && this->time == rhs.time;
 			}
 
 			bool operator != (const iterator& rhs) const
 			{
-				return this->current != rhs.current;
+				return !((*this) == rhs);
 			}
 
 			iterator& operator += (size_type count)
@@ -76,34 +83,68 @@ namespace Persistent
 
 			reference operator* () const
 			{
-				return *(current->value);
+				return *(current->Value(time));
 			}
 
 			pointer operator -> () const
 			{
-				return current->value;
+				return current->Value(time);
 			}
 
 			iterator& operator++()
 			{
-				current = current->Next();
+				current = tree.Next(current, time);
 				return *this;
 			}
 			
 			iterator& operator++(int)
 			{
-				current = current->Next();
+				current = tree.Next(current, time);
 				return *this;
 			}
 		};
 
 		Tree()
-			: root(nullptr), sentinel(nullptr), time(0)
+			: root(nullptr), sentinel(nullptr), time(0), max_time(0)
 		{
 
 		}
 
-		TIME_T GetTime() { return time; }
+		TIME_T GetMaxTime() { return max_time; }
+		TIME_T GetTime() const { return time; }
+
+		void ResetTreeTime()
+		{
+			time = max_time;
+			this->root = this->roots.rbegin()->second;
+		}
+
+		void SetTime(TIME_T t)
+		{
+			if (t > max_time)
+				throw std::runtime_error("Cannot set tree time from future!");
+			
+			time = t;
+
+			if (time == 0)
+			{
+				this->root = nullptr;
+				return;
+			}
+			
+			auto candRoot = this->roots.lower_bound(time);
+
+			//get latest root if more suitable not found
+			if (candRoot == this->roots.end())
+			{
+				this->root = this->roots.rbegin()->second;
+			}
+			else
+			{
+				this->root = candRoot->second;
+			}
+		}
+
 
 		/// temporary for testing ; this class should comply more or less to std::(multi)set interface
 		void clear()
@@ -117,32 +158,93 @@ namespace Persistent
 
 		void insert(T value)
 		{
-			pointer_ cand = root, newNode = std::make_shared<Node>(value), tmp = nullptr;;
+			if (GetTime() < max_time)
+				throw std::runtime_error("You cannot modify tree that has time set to past. Use ResetTreeTime method.");
+			
+			max_time++;
+			time = max_time;
+
+			pointer_ cand = root, tmp = nullptr;
 			while (cand != nullptr)
 			{
 				tmp = cand;
-				if (value < *(cand->value))
+				if (value < *(cand->Value(GetTime())))
 				{
-					cand = cand->left;
+					cand = cand->Left(GetTime());
 				}
 				else
 				{
-					cand = cand->right;
+					cand = cand->Right(GetTime());
 				}
 			}
-			newNode->parent = tmp;
+			auto newNode = std::make_shared<Node>(value); //creates leaf
 			if (tmp == nullptr)
 			{
 				this->root = newNode;
+				this->roots[GetTime()] = newNode;
 			}
 			else
 			{
-				if (*(newNode->value) < *(tmp->value))
-					tmp->left = newNode;
+				if (value < *(tmp->Value(GetTime())))
+				{
+					if (!tmp->HasModification())
+					{
+						// no modifications yet - insert new node
+						tmp->SetLeft(newNode, GetTime());
+					}
+					else
+					{
+						TraverseUpAndCopyModifiedNodes(newNode, tmp, GetTime(), true);
+					}
+				}
 				else
-					tmp->right = newNode;
+				{
+					if (!tmp->HasModification())
+						tmp->SetRight(newNode, GetTime());
+					else
+						TraverseUpAndCopyModifiedNodes(newNode, tmp, GetTime(), false);
+				}
 			}
+			
 		}
+
+		void TraverseUpAndCopyModifiedNodes(pointer_ child, pointer_ parent, TIME_T t, bool isLeftChild)
+		{
+			pointer_ copy; //copied node with newNode pluged in correct place
+			pointer_ tmp;
+			do
+			{
+				if (isLeftChild)
+					copy = std::make_shared<Node>(*(parent->Value(t)), child, parent->Right(t));
+				else
+					copy = std::make_shared<Node>(*(parent->Value(t)), parent->Left(t), child);
+				tmp = get_parent(parent);
+				
+				if (parent == this->root)
+				{
+					this->roots[t] = copy;
+					this->root = copy;
+					return;
+				}
+				
+				if (tmp->Left(t) == parent)
+					isLeftChild = true;
+				else
+					isLeftChild = false;
+
+				parent = tmp;
+				child = copy;
+
+			} 
+			while (parent != nullptr && parent->HasModification());
+
+			//no more copies needed, modify top-most not-modified non-root node
+			if (isLeftChild)
+				parent->SetLeft(child, t);
+			else
+				parent->SetRight(child, t);
+		}
+
 
 		iterator find(const T& val)
 		{
@@ -150,7 +252,7 @@ namespace Persistent
 			
 			if (node == nullptr)
 				return end();
-			return iterator(node);
+			return iterator(node, *this, GetTime());
 		}
 
 		void remove(const iterator& it)
@@ -160,6 +262,8 @@ namespace Persistent
 
 		pointer_ remove(const T& val)
 		{
+			if (GetTime() < max_time)
+				throw std::runtime_error("You cannot modify tree that has time set to past. Use ResetTreeTime method.");
 			pointer_ to_remove = find_internal(val);
 			if (to_remove == nullptr)
 			{
@@ -167,84 +271,118 @@ namespace Persistent
 			}
 			
 			pointer_ y, x;
-			if (to_remove->left == nullptr || to_remove == nullptr)
-			{
+			if (to_remove->Right(GetTime()) == nullptr || to_remove->Left(GetTime()) == nullptr )
+			{//no or one child
 				y = to_remove;
 			}
 			else
-			{
-				y = to_remove->Next();
+			{//both childs, harder case
+				y = Next(to_remove, GetTime());
 			}
-			if (y->left != nullptr)
+
+
+			if (y->Left(GetTime()) != nullptr)
 			{
-				x = y->left;
+				x = y->Left(GetTime());
 			}
 			else
 			{
-				x = y->right;
+				x = y->Right(GetTime());
 			}
-			if (x != nullptr)
-			{
-				x->parent = y->parent.lock();
-			}
-			if (y->parent.lock() == nullptr)
+			
+			if (get_parent(y) == nullptr)
 			{
 				root = x;
 			}
 			else
 			{
-				if (y == y->parent.lock()->left)
+				if (y == get_parent(y)->Left(GetTime()))
 				{
-					y->parent.lock()->left = x;
+					get_parent(y)->SetLeft(x, GetTime());
 				}
 				else
 				{
-					y->parent.lock()->right = x;
+					get_parent(y)->SetRight(x, GetTime());
 				}
 			}
 			if (y != to_remove)
 			{
 				to_remove->value = y->value;
-				to_remove->parent = y->parent.lock();
 				to_remove->left = y->left;
 				to_remove->right = y->right;
 			}
+			max_time++;
 			return y;
 		}
 
-		iterator begin()
+		iterator begin() 
 		{
-			return iterator(root);
+			iterator beg(root, *this, GetTime());
+			return beg;
 		}
 
-		iterator end()
+		iterator end() 
 		{
 			if (root == nullptr)
 				return begin();
-			return iterator(sentinel);
+			iterator e(sentinel, *this, GetTime());
+			return e;
 		}
 
 	private:
+		std::map<TIME_T, pointer_> roots;
 		pointer_ root;
 		pointer_ sentinel;
 		TIME_T time;
+		TIME_T max_time;
 		
-		pointer_ find_internal(T val)
+		pointer_ get_parent(const pointer_& n) const
 		{
 			auto node = root;
-			while ((node != nullptr) && (*(node->value) != val))
+			pointer_ parent = root;
+			auto val = (*n->Value(GetTime()));
+			while ((node != nullptr) && (*(node->Value(GetTime())) != val))
 			{
-				if (val < *(node->value))
+				parent = node;
+				if (val < (*(node->Value(GetTime()))))
+					node = node->Left(GetTime());
+				else
+					node = node->Right(GetTime());
+			}
+			return parent;
+		}
+
+		pointer_ find_internal(T val) const
+		{
+			auto node = root;
+			while ((node != nullptr) && (*(node->Value(GetTime())) != val))
+			{
+				if (val < *(node->Value(GetTime())))
 				{
-					node = node->left;
+					node = node->Left(GetTime());
 				}
 				else
 				{
-					node = node->right;
+					node = node->Right(GetTime());
 				}
 			}
 			return node;
 		}
+
+		pointer_ Next(pointer_ node, const TIME_T when) const
+		{
+			if (node->Right(when) != nullptr)
+				return Node::MinimumNode(node->Right(when), when);
+			pointer_ cand = get_parent(node), r = nullptr;
+			while (cand != nullptr && (r = cand->Right(when)) != nullptr)
+			{
+				r = cand;
+				cand = get_parent(cand);
+			}
+			return cand;
+
+		}
+
 		enum class Modification_t : unsigned int
 		{
 			None,
@@ -253,34 +391,43 @@ namespace Persistent
 			Value
 		};
 
-		union Store_t
-		{
-			pointer_ node;
-			std::shared_ptr<T> value;
-			~Store_t()
-			{
-
-			}
-		};
-
 		struct ModInfo
 		{
 			const Modification_t kind;
 			TIME_T time;
-			Store_t store;
+			pointer_ node;
+			std::shared_ptr<T> value;
 			
 			explicit ModInfo(Modification_t which, const pointer_& node, const TIME_T t)
 				: kind(which), time(t)
 			{
 				assert(kind == Modification_t::Left || kind == Modification_t::Right);
-				store.node = node;
+				this->node = node;
 			}
 			
 			explicit ModInfo(Modification_t which, const std::shared_ptr<T>& value, const TIME_T t)
 				: kind(which), time(t)
 			{
 				assert(kind == Modification_t::Value);
-				store.value = value;
+				this->value = value;
+			}
+
+			bool operator ==(const ModInfo& rhs)
+			{
+				bool trival = time == rhs.time && kind == rhs.kind;
+				if (!trival)
+					return false;
+				switch (kind)
+				{
+				case Modification_t::Left:
+				case Modification_t::Right:
+					return this->node == this->node;
+				case Modification_t::Value:
+					return this->value == this->value;
+				default:
+					assert(false);
+				}
+				return false;
 			}
 
 			~ModInfo()
@@ -293,7 +440,6 @@ namespace Persistent
 		private:
 			pointer_ left;
 			pointer_ right;
-			weak_pointer parent;
 			std::unique_ptr<ModInfo> modInfo;
 			std::shared_ptr<T> value;
 
@@ -305,35 +451,41 @@ namespace Persistent
 			}
 
 			//for tree recreation when going up
-			Node(T value, const pointer_& left, const pointer_& right, const weak_pointer& parent)
-				: this->left(left), this->right(right), this->parent(parent.lock())
+			Node(T value, const pointer_& left, const pointer_& right)
+				: left(left), right(right), value(std::allocate_shared<T>(Tree::allocator_type(), value))
 			{
 
 			}
 
-			const pointer_ Left(const TIME_T when)
+			bool operator == (const Node& rhs) const
+			{
+				return left == rhs.left && right == rhs.right && value == rhs.value
+					&& *modInfo == *rhs.modInfo; //modInfo is unique, perform value comparison
+			}
+
+			const pointer_ Left(const TIME_T when) const
 			{
 				if (modInfo && modInfo->time <= when && modInfo->kind == Modification_t::Left)
 				{
-					return modInfo->store.node;
+					return modInfo->node;
 				}
 				return left;
 			}
 
-			const pointer_ Right(const TIME_T when)
+			const pointer_ Right(const TIME_T when) const
 			{
 				if (modInfo && modInfo->time <= when && modInfo->kind == Modification_t::Right)
 				{
-					return modInfo->store.node;
+					return modInfo->node;
 				}
 				return right;
 			}
 
-			const std::shared_ptr<T> Value(const TIME_T when)
+			const std::shared_ptr<T> Value(const TIME_T when) const
 			{
 				if (modInfo && modInfo->time <= when && modInfo->kind == Modification_t::Value)
 				{
-					return modInfo->store.value;
+					return modInfo->value;
 				}
 				return value;
 			}
@@ -361,27 +513,13 @@ namespace Persistent
 				modInfo = std::make_unique<ModInfo>(Modification_t::Value, newValue, when);
 			}
 
-			pointer_ MinimumNode(pointer_ node)
+			static pointer_ MinimumNode(pointer_ node, const TIME_T when)
 			{
-				while (node->left != nullptr)
+				while (node->Left(when) != nullptr)
 				{
-					node = node->left;
+					node = node->Left(when);
 				}
 				return node;
-			}
-
-			pointer_ Next()
-			{
-				if (this->right != nullptr)
-					return MinimumNode(this->right);
-				pointer_ cand = this->parent.lock(), r = nullptr;
-				while (cand != nullptr && (r = cand->right) != nullptr)
-				{
-					r = cand;
-					cand = cand->parent.lock();
-				}
-				return cand;
-
 			}
 		};
 
