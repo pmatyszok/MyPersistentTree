@@ -72,6 +72,7 @@ struct verify {
 		assert(tester::livecount == 0); 
 	}
 } verifier;
+
 template <typename T>
 void check( Tree<T>& t, const T& v)
 {
@@ -86,94 +87,137 @@ void check( Tree<T>& t, const T& v)
 	}
 }
 
+template<typename T>
+void inorder(Tree<T>& t)
+{
+	for (auto it = t.begin(); it != t.end(); it++)
+	{
+		cout << *it << '\t';
+	}
+	cout << endl;
+}
+
 int main()
 {
 	// basic testing
 	Tree<int> t;
-	cout << "Tree time on creation: " << t.GetTime() << '\t' << t.GetMaxTime() << endl;
-	check(t, 1);
-	t.insert(1);
-	cout << "Tree time after first insertion: " << t.GetTime() << '\t' << t.GetMaxTime() << endl;
-	check(t, 1);
-	cout << "Changing time to " << 0 << endl;
-	t.SetTime(0);
-	check(t, 1);
-	t.ResetTreeTime();
 	t.insert(2);
 	t.insert(3);
-	t.insert(4);
-	t.insert(5);
-	t.insert(6);
-
-	cout << "Tree time after 6 insertions: " << t.GetTime() << endl;
-	cout << "Max time after 6 insertions: " << t.GetMaxTime() << endl;
-	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-	cout << "Changing time to " << 5 << endl;
-	t.SetTime(5);
-	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-	cout << "Changing time to " << 4 << endl;
-	t.SetTime(4);
-	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-	cout << "Changing time to " << 3 << endl;
-	t.SetTime(3);
-	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-	cout << "Changing time to " << 2 << endl;
+	t.insert(1);
+	cout << "time " << t.GetTime() << endl;
+	check(t,1);
+	check(t,2);
+	check(t,3);
+	inorder(t);
 	t.SetTime(2);
-	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-	cout << "Changing time to " << 1 << endl;
+	cout << "time " << t.GetTime() << endl;
+	check(t, 1);
+	check(t, 2);
+	check(t, 3);
+
 	t.SetTime(1);
-	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-	cout << "Changing time to " << 0 << endl;
+	cout << "time " << t.GetTime() << endl;
+	check(t, 1);
+	check(t, 2);
+	check(t, 3);
+
 	t.SetTime(0);
-	if (t.begin() != t.end())
-		cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-	
-	auto it = t.find(5);
-	if (it != t.end())
-		cout << *it << endl;
-	else
-		cout << "5 not found" << endl;
+	cout << "time " << t.GetTime() << endl;
+	check(t, 1);
+	check(t, 2);
+	check(t, 3);
 
-	it = t.find(1);
-	if (it != t.end())
-		cout << *it << endl;
-	else
-		cout << "1 not found" << endl;
-
-	cout << "Changing time to " << 5 << endl;
-	t.SetTime(5);
-
-	it = t.find(5);
-	if (it != t.end())
-		cout << *it << endl;
-	else
-		cout << "5 not found" << endl;
-
-	cout << "Changing time to " << 4 << endl;
-
-	it = t.find(5);
-	if (it != t.end())
-		cout << *it << endl;
-	else
-		cout << "5 not found" << endl;
 	t.ResetTreeTime();
-	it = t.find(5);
-	if (it != t.end())
-		it++;
-	cout << *it << endl;
-	it = t.begin();
-	advance(it, 1);
-	cout << *(it) << endl;
-	t.remove(1);
-	// verifier approach
-	tester a(1);
-	a = tester(2);
+	t.remove(2);
+	cout << "time " << t.GetTime() << endl;
+	check(t, 1);
+	check(t, 2);
+	check(t, 3);
+	inorder(t);
+	//cout << "Tree time on creation: " << t.GetTime() << '\t' << t.GetMaxTime() << endl;
+	//check(t, 1);
+	//t.insert(1);
+	//cout << "Tree time after first insertion: " << t.GetTime() << '\t' << t.GetMaxTime() << endl;
+	//check(t, 1);
+	//cout << "Changing time to " << 0 << endl;
+	//t.SetTime(0);
+	//check(t, 1);
+	//t.ResetTreeTime();
+	//t.insert(2);
+	//t.insert(3);
+	//t.insert(4);
+	//t.insert(5);
+	//t.insert(6);
+
+	//cout << "Tree time after 6 insertions: " << t.GetTime() << endl;
+	//cout << "Max time after 6 insertions: " << t.GetMaxTime() << endl;
+	//cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	//cout << "Changing time to " << 5 << endl;
+	//t.SetTime(5);
+	//cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	//cout << "Changing time to " << 4 << endl;
+	//t.SetTime(4);
+	//cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	//cout << "Changing time to " << 3 << endl;
+	//t.SetTime(3);
+	//cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	//cout << "Changing time to " << 2 << endl;
+	//t.SetTime(2);
+	//cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	//cout << "Changing time to " << 1 << endl;
+	//t.SetTime(1);
+	//cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	//cout << "Changing time to " << 0 << endl;
+	//t.SetTime(0);
+	//if (t.begin() != t.end())
+	//	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	//
+	//auto it = t.find(5);
+	//if (it != t.end())
+	//	cout << *it << endl;
+	//else
+	//	cout << "5 not found" << endl;
+
+	//it = t.find(1);
+	//if (it != t.end())
+	//	cout << *it << endl;
+	//else
+	//	cout << "1 not found" << endl;
+
+	//cout << "Changing time to " << 5 << endl;
+	//t.SetTime(5);
+
+	//it = t.find(5);
+	//if (it != t.end())
+	//	cout << *it << endl;
+	//else
+	//	cout << "5 not found" << endl;
+
+	//cout << "Changing time to " << 4 << endl;
+
+	//it = t.find(5);
+	//if (it != t.end())
+	//	cout << *it << endl;
+	//else
+	//	cout << "5 not found" << endl;
+	//t.ResetTreeTime();
+	//it = t.find(5);
+	//if (it != t.end())
+	//	it++;
+	//cout << *it << endl;
+	//it = t.begin();
+	//advance(it, 1);
+	//cout << *(it) << endl;
+	//t.remove(1);
+	//// verifier approach
+	//tester a(1);
+	//a = tester(2);
 
 
 
-	Tree<tester> t2;
-	t2.insert(tester(1));
-	t2.insert(tester(2));
-	t2.clear();
+	//Tree<tester> t2;
+	//t2.insert(tester(1));
+	//t2.insert(tester(2));
+	//t2.clear();
 	system("pause");
 }

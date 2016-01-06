@@ -132,7 +132,7 @@ namespace Persistent
 				return;
 			}
 
-			auto candRoot = this->roots.lower_bound(time);
+			auto candRoot = greatest_less_or_eq(this->roots, time);
 
 			//get latest root if more suitable not found
 			if (candRoot == this->roots.end())
@@ -298,6 +298,20 @@ namespace Persistent
 		TIME_T time;
 		TIME_T max_time;
 
+		template<typename Map> typename Map::iterator
+			greatest_less_or_eq(Map & m, typename Map::key_type const& k) 
+		{
+			typename Map::iterator it = m.lower_bound(k);
+			if (it->first == k)
+				return it;
+			if (it != m.begin()) 
+			{
+				return --it;
+			}
+			return m.end();
+		}
+
+
 		pointer_ remove_impl(const T& val)
 		{
 			pointer_ to_remove = find_internal(val);
@@ -357,8 +371,17 @@ namespace Persistent
 				{
 					auto child = std::make_shared<Node>(*(y->Value(GetTime())), to_remove->Left(GetTime()), to_remove->Right(GetTime()));
 					auto parent = get_parent(to_remove);
-					bool isLeft = to_remove == parent->Left(GetTime());
-					TraverseUpAndCopyModifiedNodes(child, get_parent(to_remove), GetTime(), isLeft);
+					if (parent != nullptr)
+					{
+						bool isLeft = to_remove == parent->Left(GetTime());
+						TraverseUpAndCopyModifiedNodes(child, get_parent(to_remove), GetTime(), isLeft);
+					}
+					else
+					{
+						//root is being replaced
+						this->roots[GetTime()] = child;
+						this->root = child;
+					}
 				}
 				else
 				{
