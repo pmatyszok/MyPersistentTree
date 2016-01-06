@@ -3,6 +3,7 @@
 #include <iterator>
 #include <map>
 #include <cassert>
+#include <stack>
 namespace Persistent
 {
 	template <typename T>
@@ -35,16 +36,23 @@ namespace Persistent
 		private:
 			NodeType current;
 			Tree<T, A, TIME_T>& tree;
+			std::stack<NodeType> my_stack;
 			TIME_T time;
 		public:
 			iterator(NodeType item, Tree<T, A, TIME_T>& tr, TIME_T t) :
 				current(item), tree(tr), time(t)
 			{
-
+				auto cur = current;
+				while (cur != nullptr)
+				{
+					my_stack.push(cur);
+					cur = cur->Left(time);
+				}
+				current = next();
 			}
 
 			iterator(const iterator & rhs)
-				: current(rhs.current), tree(rhs.tree), time(rhs.time)
+				: current(rhs.current), tree(rhs.tree), time(rhs.time), my_stack(rhs.my_stack)
 			{
 
 			}
@@ -61,12 +69,13 @@ namespace Persistent
 				this->current = rhs.current;
 				this->time = rhs.time;
 				this->tree = rhs.tree;
+				this->my_stack = rhs.my_stack;
 				return *this;
 			}
 
 			bool operator == (const iterator& rhs) const
 			{
-				return this->current == rhs.current && &(this->tree) == &(rhs.tree) && this->time == rhs.time;
+				return this->current == rhs.current && &(this->tree) == &(rhs.tree) && this->time == rhs.time && my_stack == rhs.my_stack;
 			}
 
 			bool operator != (const iterator& rhs) const
@@ -93,14 +102,35 @@ namespace Persistent
 
 			iterator& operator++()
 			{
-				current = tree.Next(current, time);
+				current = next();
 				return *this;
 			}
 
 			iterator& operator++(int)
 			{
-				current = tree.Next(current, time);
+				current = next();
 				return *this;
+			}
+
+		private:
+			NodeType next()
+			{
+				if (my_stack.empty())
+				{
+					return nullptr;
+				}
+				auto top = my_stack.top();
+				my_stack.pop();
+				if (nullptr != top->Right(time))
+				{
+					auto cur = top->Right(time);
+					while (nullptr != cur)
+					{
+						my_stack.push(cur);
+						cur = cur->Left(time);
+					}
+				}
+				return top;
 			}
 		};
 
