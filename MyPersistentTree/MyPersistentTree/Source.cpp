@@ -98,7 +98,7 @@ int main()
 	cout << "Changing time to " << 0 << endl;
 	t.SetTime(0);
 	check(t, 1);
-
+	t.ResetTreeTime();
 	t.insert(2);
 	t.insert(3);
 	t.insert(4);
@@ -125,8 +125,9 @@ int main()
 	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
 	cout << "Changing time to " << 0 << endl;
 	t.SetTime(0);
-	cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
-
+	if (t.begin() != t.end())
+		cout << "\"First\" value in tree at that time: " << (*t.begin()) << endl;
+	
 	auto it = t.find(5);
 	if (it != t.end())
 		cout << *it << endl;
@@ -155,13 +156,15 @@ int main()
 		cout << *it << endl;
 	else
 		cout << "5 not found" << endl;
-
-	++it;
+	t.ResetTreeTime();
+	it = t.find(5);
+	if (it != t.end())
+		it++;
 	cout << *it << endl;
 	it = t.begin();
 	advance(it, 1);
 	cout << *(it) << endl;
-
+	t.remove(1);
 	// verifier approach
 	tester a(1);
 	a = tester(2);
@@ -171,6 +174,6 @@ int main()
 	Tree<tester> t2;
 	t2.insert(tester(1));
 	t2.insert(tester(2));
-//	t2.clear();
+	t2.clear();
 	system("pause");
 }
