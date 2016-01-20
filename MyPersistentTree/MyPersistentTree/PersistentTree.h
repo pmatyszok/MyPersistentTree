@@ -183,6 +183,7 @@ namespace Persistent
 			{
 				tree->roots[r.first] = r.second->clone(GetTime());
 			}
+			tree->max_time = GetTime();
 			tree->SetTime(GetTime());
 			return tree;
 		}

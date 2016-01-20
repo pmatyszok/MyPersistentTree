@@ -107,8 +107,23 @@ void inorder(Tree<T>& t)
 
 int main()
 {
+/*	Tree<int> k;
+	k.insert(2);
+	k.insert(1);
+	k.insert(3);
+
+	auto z = k.Clone();
+	z->insert(4);
+	cout << "Z: " << z->GetTime() << endl;
+	check(*z, 4);
+	check(*z, 3);
+
+	cout << "K: " << k.GetTime() << endl;
+	check(k, 4);
+	check(k, 3);
 	
-	
+	return 0;*/
+
 	vector<string> words;
 
 	fstream file("polish.dic");
