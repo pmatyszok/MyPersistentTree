@@ -112,13 +112,13 @@ int main()
 	k.insert(1);
 	k.insert(3);
 
-	auto z = k.Clone();
+	auto z = k.clone();
 	z->insert(4);
-	cout << "Z: " << z->GetTime() << endl;
+	cout << "Z: " << z->get_time() << endl;
 	check(*z, 4);
 	check(*z, 3);
 
-	cout << "K: " << k.GetTime() << endl;
+	cout << "K: " << k.get_time() << endl;
 	check(k, 4);
 	check(k, 3);
 	

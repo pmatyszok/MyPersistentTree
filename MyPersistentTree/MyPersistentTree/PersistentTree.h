@@ -140,16 +140,16 @@ namespace Persistent
 
 		}
 
-		TIME_T GetMaxTime() { return max_time; }
-		TIME_T GetTime() const { return time; }
+		TIME_T get_max_time() { return max_time; }
+		TIME_T get_time() const { return time; }
 
-		void ResetTreeTime()
+		void reset_tree_time()
 		{
 			time = max_time;
 			this->root = this->roots.rbegin()->second;
 		}
 
-		void SetTime(TIME_T t)
+		void set_time(TIME_T t)
 		{
 			if (t > max_time)
 				throw std::runtime_error("Cannot set tree time from future!");
@@ -176,15 +176,15 @@ namespace Persistent
 		}
 
 
-		std::shared_ptr<Tree<T, A, TIME_T>> Clone()
+		std::shared_ptr<Tree<T, A, TIME_T>> clone()
 		{
 			auto tree = std::make_shared<Tree>();
 			for (const auto r : roots)
 			{
-				tree->roots[r.first] = r.second->clone(GetTime());
+				tree->roots[r.first] = r.second->clone(get_time());
 			}
-			tree->max_time = GetTime();
-			tree->SetTime(GetTime());
+			tree->max_time = get_time();
+			tree->set_time(get_time());
 			return tree;
 		}
 
@@ -204,8 +204,8 @@ namespace Persistent
 
 		void insert(T value)
 		{
-			if (GetTime() < max_time)
-				throw std::runtime_error("You cannot modify tree that has time set to past. Use ResetTreeTime method.");
+			if (get_time() < max_time)
+				throw std::runtime_error("You cannot modify tree that has time set to past. Use reset_tree_time method.");
 
 			max_time++;
 			time = max_time;
@@ -214,45 +214,96 @@ namespace Persistent
 			while (cand != nullptr)
 			{
 				tmp = cand;
-				if (value < *(cand->Value(GetTime())))
+				if (value < *(cand->Value(get_time())))
 				{
-					cand = cand->Left(GetTime());
+					cand = cand->Left(get_time());
 				}
 				else
 				{
-					cand = cand->Right(GetTime());
+					cand = cand->Right(get_time());
 				}
 			}
 			auto newNode = std::make_shared<Node>(value); //creates leaf
 			if (tmp == nullptr)
 			{
 				this->root = newNode;
-				this->roots[GetTime()] = newNode;
+				this->roots[get_time()] = newNode;
 			}
 			else
 			{
-				if (value < *(tmp->Value(GetTime())))
+				if (value < *(tmp->Value(get_time())))
 				{
 					if (!tmp->HasModification())
 					{
 						// no modifications yet - insert new node
-						tmp->SetLeft(newNode, GetTime());
+						tmp->SetLeft(newNode, get_time());
 					}
 					else
 					{
-						TraverseUpAndCopyModifiedNodes(newNode, tmp, GetTime(), true);
+						TraverseUpAndCopyModifiedNodes(newNode, tmp, get_time(), true);
 					}
 				}
 				else
 				{
 					if (!tmp->HasModification())
-						tmp->SetRight(newNode, GetTime());
+						tmp->SetRight(newNode, get_time());
 					else
-						TraverseUpAndCopyModifiedNodes(newNode, tmp, GetTime(), false);
+						TraverseUpAndCopyModifiedNodes(newNode, tmp, get_time(), false);
 				}
 			}
 
 		}
+
+		
+
+
+
+		iterator find(const T& val)
+		{
+			pointer_ node = find_internal(val);
+
+			if (node == nullptr)
+				return end();
+			return iterator(node, *this, get_time());
+		}
+
+		void remove(const iterator& it)
+		{
+			this->remove(*it);
+		}
+
+
+
+		pointer_ remove(const T& val)
+		{
+			if (get_time() < max_time)
+				throw std::runtime_error("You cannot modify tree that has time set to past. Use reset_tree_time method.");
+			auto y = remove_impl(val);
+			max_time++;
+			time = max_time;
+			return y;
+		}
+
+		iterator begin()
+		{
+			iterator beg(root, *this, get_time());
+			return beg;
+		}
+
+		iterator end()
+		{
+			if (root == nullptr)
+				return begin();
+			iterator e(sentinel, *this, get_time());
+			return e;
+		}
+
+	private:
+		std::map<TIME_T, pointer_> roots;
+		pointer_ root;
+		pointer_ sentinel;
+		TIME_T time;
+		TIME_T max_time;
 
 		void TraverseUpAndCopyModifiedNodes(pointer_ child, pointer_ parent, TIME_T t, bool isLeftChild)
 		{
@@ -290,55 +341,6 @@ namespace Persistent
 				parent->SetRight(child, t);
 		}
 
-
-
-		iterator find(const T& val)
-		{
-			pointer_ node = find_internal(val);
-
-			if (node == nullptr)
-				return end();
-			return iterator(node, *this, GetTime());
-		}
-
-		void remove(const iterator& it)
-		{
-			this->remove(*it);
-		}
-
-
-
-		pointer_ remove(const T& val)
-		{
-			if (GetTime() < max_time)
-				throw std::runtime_error("You cannot modify tree that has time set to past. Use ResetTreeTime method.");
-			auto y = remove_impl(val);
-			max_time++;
-			time = max_time;
-			return y;
-		}
-
-		iterator begin()
-		{
-			iterator beg(root, *this, GetTime());
-			return beg;
-		}
-
-		iterator end()
-		{
-			if (root == nullptr)
-				return begin();
-			iterator e(sentinel, *this, GetTime());
-			return e;
-		}
-
-	private:
-		std::map<TIME_T, pointer_> roots;
-		pointer_ root;
-		pointer_ sentinel;
-		TIME_T time;
-		TIME_T max_time;
-
 		template<typename Map> typename Map::iterator
 			greatest_less_or_eq(Map & m, typename Map::key_type const& k) 
 		{
@@ -362,47 +364,47 @@ namespace Persistent
 			}
 
 			pointer_ y, x;
-			if (to_remove->Right(GetTime()) == nullptr || to_remove->Left(GetTime()) == nullptr)
+			if (to_remove->Right(get_time()) == nullptr || to_remove->Left(get_time()) == nullptr)
 			{//none or one child
 				y = to_remove;
 			}
 			else
 			{//both childs, harder case
-				y = Next(to_remove, GetTime());
+				y = Next(to_remove, get_time());
 			}
 
 
-			if (y->Left(GetTime()) != nullptr)
+			if (y->Left(get_time()) != nullptr)
 			{
-				x = y->Left(GetTime());
+				x = y->Left(get_time());
 			}
 			else
 			{
-				x = y->Right(GetTime());
+				x = y->Right(get_time());
 			}
 
 			if (get_parent(y) == nullptr)
 			{
 				root = x;
-				this->roots[GetTime()] = x;
+				this->roots[get_time()] = x;
 			}
 			else
 			{
 				auto yparent = get_parent(y);
 				bool hasMod = yparent->HasModification();
-				if (y == yparent->Left(GetTime()))
+				if (y == yparent->Left(get_time()))
 				{
 					if (!hasMod)
-						yparent->SetLeft(x, GetTime());
+						yparent->SetLeft(x, get_time());
 					else
-						TraverseUpAndCopyModifiedNodes(x, yparent, GetTime(), true);
+						TraverseUpAndCopyModifiedNodes(x, yparent, get_time(), true);
 				}
 				else
 				{
 					if (!hasMod)
-						yparent->SetRight(x, GetTime());
+						yparent->SetRight(x, get_time());
 					else
-						TraverseUpAndCopyModifiedNodes(x, yparent, GetTime(), false);
+						TraverseUpAndCopyModifiedNodes(x, yparent, get_time(), false);
 				}
 			}
 			if (y != to_remove)
@@ -410,23 +412,23 @@ namespace Persistent
 				//copy Value!
 				if (to_remove->HasModification())
 				{
-					auto child = std::make_shared<Node>(*(y->Value(GetTime())), to_remove->Left(GetTime()), to_remove->Right(GetTime()));
+					auto child = std::make_shared<Node>(*(y->Value(get_time())), to_remove->Left(get_time()), to_remove->Right(get_time()));
 					auto parent = get_parent(to_remove);
 					if (parent != nullptr)
 					{
-						bool isLeft = to_remove == parent->Left(GetTime());
-						TraverseUpAndCopyModifiedNodes(child, get_parent(to_remove), GetTime(), isLeft);
+						bool isLeft = to_remove == parent->Left(get_time());
+						TraverseUpAndCopyModifiedNodes(child, get_parent(to_remove), get_time(), isLeft);
 					}
 					else
 					{
 						//root is being replaced
-						this->roots[GetTime()] = child;
+						this->roots[get_time()] = child;
 						this->root = child;
 					}
 				}
 				else
 				{
-					to_remove->SetValue(y->Value(GetTime()), GetTime());
+					to_remove->SetValue(y->Value(get_time()), get_time());
 				}
 			}
 			return y;
@@ -436,14 +438,14 @@ namespace Persistent
 		{
 			auto node = root;
 			pointer_ parent = nullptr;
-			auto val = (*n->Value(GetTime()));
-			while ((node != nullptr) && (*(node->Value(GetTime())) != val))
+			auto val = (*n->Value(get_time()));
+			while ((node != nullptr) && (*(node->Value(get_time())) != val))
 			{
 				parent = node;
-				if (val < (*(node->Value(GetTime()))))
-					node = node->Left(GetTime());
+				if (val < (*(node->Value(get_time()))))
+					node = node->Left(get_time());
 				else
-					node = node->Right(GetTime());
+					node = node->Right(get_time());
 			}
 			return parent;
 		}
@@ -451,15 +453,15 @@ namespace Persistent
 		pointer_ find_internal(T val) const
 		{
 			auto node = root;
-			while ((node != nullptr) && (*(node->Value(GetTime())) != val))
+			while ((node != nullptr) && (*(node->Value(get_time())) != val))
 			{
-				if (val < *(node->Value(GetTime())))
+				if (val < *(node->Value(get_time())))
 				{
-					node = node->Left(GetTime());
+					node = node->Left(get_time());
 				}
 				else
 				{
-					node = node->Right(GetTime());
+					node = node->Right(get_time());
 				}
 			}
 			return node;
