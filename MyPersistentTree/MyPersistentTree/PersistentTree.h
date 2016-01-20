@@ -14,7 +14,7 @@ namespace Persistent
 	{
 		struct Node;
 		typedef typename std::shared_ptr<Node> pointer_;
-		typedef typename std::weak_ptr<Node> weak_pointer;
+		
 	public:
 		typedef A allocator_type;
 		typedef typename A::value_type value_type;
@@ -176,7 +176,17 @@ namespace Persistent
 		}
 
 
-		/// temporary for testing ; this class should comply more or less to std::(multi)set interface
+		std::shared_ptr<Tree<T, A, TIME_T>> Clone()
+		{
+			auto tree = std::make_shared<Tree>();
+			for (const auto r : roots)
+			{
+				tree->roots[r.first] = r.second->clone(GetTime());
+			}
+			tree->SetTime(GetTime());
+			return tree;
+		}
+
 		void clear()
 		{
 			auto begin = this->begin();
@@ -482,14 +492,14 @@ namespace Persistent
 			TIME_T time;
 			pointer_ node;
 			std::shared_ptr<T> value;
-			
+
 			explicit ModInfo(Modification_t which, const pointer_& node, const TIME_T t)
 				: kind(which), time(t)
 			{
 				assert(kind == Modification_t::Left || kind == Modification_t::Right);
 				this->node = node;
 			}
-			
+
 			explicit ModInfo(Modification_t which, const std::shared_ptr<T>& value, const TIME_T t)
 				: kind(which), time(t)
 			{
@@ -514,7 +524,7 @@ namespace Persistent
 				}
 				return false;
 			}
-
+			
 			~ModInfo()
 			{
 			}
@@ -540,6 +550,41 @@ namespace Persistent
 				: left(left), right(right), value(std::allocate_shared<T>(Tree::allocator_type(), value))
 			{
 
+			}
+
+			std::shared_ptr<Node> clone(TIME_T when)
+			{
+				std::shared_ptr<Node> copy;
+				if (left != nullptr && right != nullptr )
+				{
+					copy = std::make_shared<Node>(*(this->value), left->clone(when), right->clone(when)); // original value
+				}
+				else
+				{
+					copy = std::make_shared<Node>(*(this->value)); // original value
+					
+					if (left != nullptr)
+					{
+						copy->left = left->clone(when);
+					}
+					else if (right != nullptr)
+					{
+						copy->right = right->clone(when);
+					}
+				}
+				if (modInfo)
+				{
+					switch (modInfo->kind)
+					{
+					case Modification_t::Value:
+						copy->SetValue(this->Value(modInfo->time), modInfo->time); break;
+					case Modification_t::Left:
+						copy->SetLeft(this->Left(modInfo->time), modInfo->time); break;
+					case Modification_t::Right:
+						copy->SetRight(this->Right(modInfo->time), modInfo->time); break;
+					}
+				}
+				return copy;
 			}
 
 			bool operator == (const Node& rhs) const
@@ -607,10 +652,5 @@ namespace Persistent
 				return node;
 			}
 		};
-
-		
-
-	public:
-
 	};
 }
